@@ -1,0 +1,21 @@
+# Xcode
+build/
+DerivedData/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+xcuserdata/
+*.xcuserstate
+
+# Generated Xcode project (regenerate with `xcodegen`)
+NDIMonitor.xcodeproj/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# NDI SDK — proprietary, license-gated. Do NOT commit the binary/headers.
+Vendor/NDI/
+
+# macOS
+.DS_Store

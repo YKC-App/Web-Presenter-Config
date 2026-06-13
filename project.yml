@@ -1,0 +1,51 @@
+# XcodeGen spec for the NDI Monitor iPad app.
+#
+# Generate the Xcode project with:
+#     brew install xcodegen   # once
+#     xcodegen generate
+#     open NDIMonitor.xcodeproj
+#
+# The project file itself is git-ignored so it can be regenerated cleanly.
+
+name: NDIMonitor
+
+options:
+  bundleIdPrefix: com.webpresenter
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: en
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    TARGETED_DEVICE_FAMILY: "2"   # iPad
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # To build against the real NDI SDK, add USE_REAL_NDI here and configure the
+    # NDISDK module per docs/NDI_SDK_INTEGRATION.md.
+    # SWIFT_ACTIVE_COMPILATION_CONDITIONS: USE_REAL_NDI
+
+targets:
+  NDIMonitor:
+    type: application
+    platform: iOS
+    sources:
+      - path: NDIMonitor
+    info:
+      path: NDIMonitor/Resources/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.webpresenter.ndimonitor
+        INFOPLIST_FILE: NDIMonitor/Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+
+  NDIMonitorTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: NDIMonitorTests
+    dependencies:
+      - target: NDIMonitor
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.webpresenter.ndimonitor.tests
