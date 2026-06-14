@@ -86,7 +86,9 @@ private final class LibNDIReceiver: NDIReceiverHandle {
 
     private func connect() {
         var recvCreate = NDIlib_recv_create_v3_t()
-        recvCreate.color_format = NDIlib_recv_color_format_fastest
+        // Request BGRA so frames map 1:1 to kCVPixelFormatType_32BGRA and the
+        // AVSampleBufferDisplayLayer renderer can display them with a simple copy.
+        recvCreate.color_format = NDIlib_recv_color_format_BGRX_BGRA
         recvCreate.bandwidth = NDIlib_recv_bandwidth_highest
         // Pin the receiver to this source by name.
         source.ndiName.withCString { namePtr in
@@ -128,12 +130,40 @@ private final class LibNDIReceiver: NDIReceiverHandle {
         }
     }
 
-    /// Wrap the SDK's frame memory in a CVPixelBuffer (UYVY/BGRA) without copy
-    /// where possible. Implementation detail elided to the SDK pixel format.
+    /// Copy the SDK's BGRA frame memory into a CVPixelBuffer for display.
+    ///
+    /// We request `NDIlib_recv_color_format_BGRX_BGRA`, so `frame.p_data` is
+    /// 32-bit BGRA. A row-by-row copy (honouring the source stride) is robust
+    /// and avoids holding SDK-owned memory past `NDIlib_recv_free_video_v2`.
     private static func pixelBuffer(from frame: NDIlib_video_frame_v2_t) -> CVPixelBuffer? {
-        // Map frame.FourCC → CVPixelFormat and wrap frame.p_data.
-        // See docs/NDI_SDK_INTEGRATION.md for the zero-copy strategy.
-        return nil
+        guard let src = frame.p_data else { return nil }
+        let width = Int(frame.xres)
+        let height = Int(frame.yres)
+        guard width > 0, height > 0 else { return nil }
+
+        var pb: CVPixelBuffer?
+        let attrs: [CFString: Any] = [
+            kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary,
+            kCVPixelBufferMetalCompatibilityKey: true,
+        ]
+        guard CVPixelBufferCreate(kCFAllocatorDefault, width, height,
+                                  kCVPixelFormatType_32BGRA,
+                                  attrs as CFDictionary, &pb) == kCVReturnSuccess,
+              let buffer = pb else { return nil }
+
+        CVPixelBufferLockBaseAddress(buffer, [])
+        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
+        guard let dst = CVPixelBufferGetBaseAddress(buffer) else { return nil }
+
+        let dstStride = CVPixelBufferGetBytesPerRow(buffer)
+        let srcStride = Int(frame.line_stride_in_bytes)
+        let rowBytes = min(dstStride, srcStride)
+        for y in 0..<height {
+            memcpy(dst.advanced(by: y * dstStride),
+                   src.advanced(by: y * srcStride),
+                   rowBytes)
+        }
+        return buffer
     }
 
     func send(_ command: PTZCommand) {

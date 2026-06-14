@@ -14,8 +14,10 @@ NDIMonitor.xcodeproj/
 .build/
 .swiftpm/
 
-# NDI SDK — proprietary, license-gated. Do NOT commit the binary/headers.
-Vendor/NDI/
+# NDI SDK — proprietary, license-gated. Do NOT commit the binary/headers,
+# but DO keep the module map (it is our own glue, not SDK content).
+Vendor/NDI/*
+!Vendor/NDI/module.modulemap
 
 # macOS
 .DS_Store

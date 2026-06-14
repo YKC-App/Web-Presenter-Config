@@ -1,0 +1,12 @@
+// Exposes the NDI SDK C API to Swift as `import NDISDK`.
+// Header/library paths are resolved relative to this folder via the target's
+// SWIFT_INCLUDE_PATHS / HEADER_SEARCH_PATHS / LIBRARY_SEARCH_PATHS settings
+// (see project.yml). The actual SDK files live alongside this file:
+//   Vendor/NDI/include/Processing.NDI.Lib.h
+//   Vendor/NDI/libndi_ios.a
+// and are git-ignored (proprietary). Only this module map is committed.
+module NDISDK {
+    header "include/Processing.NDI.Lib.h"
+    link "ndi_ios"
+    export *
+}

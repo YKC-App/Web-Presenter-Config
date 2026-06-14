@@ -1,7 +1,24 @@
 # Integrating the real NDI SDK
 
-The repo compiles against `MockNDIService` so it runs with **no** proprietary
-binary. To drive real cameras, drop in the official SDK and flip one flag.
+The repo is already wired for the **static** SDK (`libndi_ios.a`): the
+`USE_REAL_NDI` flag, the `NDISDK` module map, the `project.yml` link settings,
+and the BGRA frame conversion in `LibNDIService` are all in place. The only
+remaining steps are placing the SDK binary and generating the project.
+
+## Quick start (recommended)
+
+From the repo root on your Mac:
+
+```bash
+./scripts/setup_ndi.sh         # copies the SDK, runs xcodegen
+open NDIMonitor.xcodeproj
+```
+
+The script copies the SDK from `/Library/NDI SDK for Apple` into `Vendor/NDI/`
+(binaries stay git-ignored; only `module.modulemap` is committed) and generates
+the project. Override the location with `NDI_SDK_DIR=... ./scripts/setup_ndi.sh`.
+
+The sections below document what that automation does, for reference.
 
 ## 1. Obtain the SDK
 
