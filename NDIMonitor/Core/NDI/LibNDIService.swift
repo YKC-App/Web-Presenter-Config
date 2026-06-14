@@ -182,7 +182,10 @@ private final class LibNDIReceiver: NDIReceiverHandle {
         case .autoFocus(let on):
             if on { NDIlib_recv_ptz_auto_focus(recv) }
         case .iris(let s):
-            NDIlib_recv_ptz_exposure_iris_speed(recv, s)
+            // SDK has no speed-based iris API. Map the −1…1 speed to a 0…1
+            // absolute exposure level: centre (0) = 0.5, in = 1.0, out = 0.0.
+            let level = max(0.0, min(1.0, (s + 1.0) / 2.0))
+            NDIlib_recv_ptz_exposure_manual(recv, level)
         case .autoIris(let on):
             if on { NDIlib_recv_ptz_exposure_auto(recv) }
         case .recallPreset(let index, let speed):
