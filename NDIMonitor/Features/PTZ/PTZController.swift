@@ -64,9 +64,22 @@ final class PTZController: ObservableObject {
     func drive(pan: Float, tilt: Float) {
         rawPanTilt = (pan, tilt)
         currentPanTilt = (pan * panTiltSpeed, tilt * panTiltSpeed)
+        // If a live task is already running, just updating currentPanTilt is
+        // enough — the next tick picks it up. Only start a new task when there
+        // is none (or the previous one finished/was cancelled and left a stale
+        // reference, which we detect by trying to cancel + restart).
         guard driveTask == nil else { return }
         isDriving = true
         driveTask = Task { [weak self] in
+            defer {
+                // Always clear the reference when the loop exits so the next
+                // call to drive() can start a fresh task (prevents zombie tasks
+                // from blocking PTZ after source switches).
+                Task { @MainActor [weak self] in
+                    self?.driveTask = nil
+                    self?.isDriving = false
+                }
+            }
             while !Task.isCancelled {
                 guard let self else { return }
                 self.receiver.send(.panTilt(pan: self.currentPanTilt.pan,

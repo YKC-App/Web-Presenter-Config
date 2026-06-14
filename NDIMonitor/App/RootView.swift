@@ -77,10 +77,19 @@ private struct ControlInspector: View {
             .pickerStyle(.segmented)
 
             if let receiver = ndiManager.receiver(for: source.id) {
+                // .id(ObjectIdentifier(receiver)) forces SwiftUI to destroy and
+                // recreate the child view — and its @StateObject controllers —
+                // whenever the receiver object changes (e.g. source removed then
+                // re-added creates a new receiver instance). Without this, the
+                // PTZController / KVMController keep a reference to the old,
+                // stopped receiver and all commands silently no-op.
                 switch tab {
                 case .ptz:  PTZControlView(receiver: receiver)
+                                .id(ObjectIdentifier(receiver))
                 case .kvm:  KVMTrackpadView(receiver: receiver)
+                                .id(ObjectIdentifier(receiver))
                 case .auto: AutoAnglePanel(receiver: receiver)
+                                .id(ObjectIdentifier(receiver))
                 }
             } else {
                 EmptyStateView(title: "Not monitoring",
