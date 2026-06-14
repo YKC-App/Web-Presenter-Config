@@ -18,6 +18,19 @@ final class PTZController: ObservableObject {
     /// True while a continuous pan/tilt drive is in flight.
     @Published private(set) var isDriving = false
 
+    /// Overall pan/tilt speed multiplier applied to joystick output (0.1…1.0).
+    /// Lower values give finer control; 1.0 is full-speed.
+    @Published var panTiltSpeed: Float = 0.5 {
+        didSet {
+            // If a drive is in progress, apply the new multiplier immediately.
+            currentPanTilt = (rawPanTilt.pan * panTiltSpeed, rawPanTilt.tilt * panTiltSpeed)
+        }
+    }
+
+    /// Raw joystick vector before speed scaling (saved so the slider can
+    /// retroactively re-scale while the stick is held).
+    private var rawPanTilt: (pan: Float, tilt: Float) = (0, 0)
+
     private let receiver: NDIReceiverHandle
     private var statusTask: Task<Void, Never>?
 
@@ -49,7 +62,8 @@ final class PTZController: ObservableObject {
     /// A steady ~20 Hz repeater re-sends the latest stick vector so the camera
     /// keeps moving smoothly without us flooding it on every touch event.
     func drive(pan: Float, tilt: Float) {
-        currentPanTilt = (pan, tilt)
+        rawPanTilt = (pan, tilt)
+        currentPanTilt = (pan * panTiltSpeed, tilt * panTiltSpeed)
         guard driveTask == nil else { return }
         isDriving = true
         driveTask = Task { [weak self] in
@@ -66,6 +80,7 @@ final class PTZController: ObservableObject {
     func endDrive() {
         driveTask?.cancel()
         driveTask = nil
+        rawPanTilt = (0, 0)
         currentPanTilt = (0, 0)
         isDriving = false
         receiver.send(.panTilt(pan: 0, tilt: 0))

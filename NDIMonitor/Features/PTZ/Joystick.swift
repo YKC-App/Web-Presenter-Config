@@ -48,8 +48,9 @@ struct Joystick: View {
                     let dist = sqrt(dx*dx + dy*dy)
                     if dist > radius { dx *= radius / dist; dy *= radius / dist }
                     knob = CGSize(width: dx, height: dy)
-                    // Tilt is inverted: dragging up should pan the camera up.
-                    onChange(Float(dx / radius), Float(-dy / radius))
+                    // Pan: negate dx so dragging right moves the camera right.
+                    // Tilt: negate dy so dragging up tilts the camera up.
+                    onChange(Float(-dx / radius), Float(-dy / radius))
                 }
                 .onEnded { _ in
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) { knob = .zero }

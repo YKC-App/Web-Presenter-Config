@@ -24,11 +24,28 @@ struct PTZControlView: View {
                 )
                 .padding(.top, 8)
 
+                speedControl
                 zoomFocusControls
                 Divider()
                 presetGrid
             }
             .padding()
+        }
+    }
+
+    private var speedControl: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("PT Speed").font(.subheadline.weight(.medium))
+                Spacer()
+                Text(String(format: "%.0f%%", controller.panTiltSpeed * 100))
+                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            }
+            HStack(spacing: 8) {
+                Image(systemName: "tortoise").foregroundStyle(.secondary)
+                Slider(value: $controller.panTiltSpeed, in: 0.05...1.0, step: 0.05)
+                Image(systemName: "hare").foregroundStyle(.secondary)
+            }
         }
     }
 
