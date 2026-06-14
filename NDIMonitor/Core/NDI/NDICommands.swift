@@ -27,11 +27,37 @@ enum PTZCommand: Equatable {
     case autoFocus(Bool)
     /// Iris/exposure drive, −1…1.
     case iris(speed: Float)
+    /// Absolute iris/exposure level, 0…1.
+    case irisAbsolute(Float)
     case autoIris(Bool)
+    /// Select a white-balance mode (auto / indoor / outdoor / one-shot / manual).
+    case whiteBalance(WhiteBalanceMode)
+    /// Manual white balance: red & blue gains, 0…1.
+    case whiteBalanceManual(red: Float, blue: Float)
     /// Recall a stored preset (0-based index).
     case recallPreset(index: Int, speed: Float)
     /// Store the current position into a preset slot.
     case storePreset(index: Int)
+}
+
+/// White-balance mode, mapping to the NDI `NDIlib_recv_ptz_white_balance_*` API.
+enum WhiteBalanceMode: String, CaseIterable, Identifiable, Equatable {
+    case auto    = "Auto"
+    case indoor  = "Indoor"
+    case outdoor = "Outdoor"
+    case oneshot = "1-Shot"
+    case manual  = "Manual"
+    var id: String { rawValue }
+
+    var systemImage: String {
+        switch self {
+        case .auto:    return "wand.and.stars"
+        case .indoor:  return "lightbulb"
+        case .outdoor: return "sun.max"
+        case .oneshot: return "camera.aperture"
+        case .manual:  return "slider.horizontal.3"
+        }
+    }
 }
 
 // MARK: - KVM

@@ -31,13 +31,28 @@ struct NDITally: Equatable {
     static let off = NDITally(onProgram: false, onPreview: false)
 }
 
-/// Live PTZ status reported back by a camera (normalised −1…1 / 0…1).
+/// Last-known PTZ state.
+///
+/// NOTE: the NDI PTZ API is *write-only* — there is no SDK call to read a
+/// camera's current pan/zoom/iris/white-balance. These fields therefore track
+/// the values *we last sent* (plus whatever a mock/source echoes back), not a
+/// live read-back from the camera. The UI uses them so that opening a control
+/// panel never changes the camera (no command is sent on load).
 struct NDIPTZStatus: Equatable {
-    var pan: Float = 0      // −1 (left) … 1 (right)
-    var tilt: Float = 0     // −1 (down) … 1 (up)
-    var zoom: Float = 0     // 0 (wide) … 1 (tele)
-    var focus: Float = 0    // 0 … 1
+    var pan: Float = 0          // −1 (left) … 1 (right)
+    var tilt: Float = 0         // −1 (down) … 1 (up)
+    var zoom: Float = 0         // 0 (wide) … 1 (tele)
+    var focus: Float = 0        // 0 … 1
     var autoFocus: Bool = true
+
+    // Exposure / iris
+    var iris: Float = 0.5       // 0 (closed) … 1 (open)
+    var autoIris: Bool = true
+
+    // White balance
+    var whiteBalance: WhiteBalanceMode = .auto
+    var wbRed: Float = 0.5      // 0 … 1
+    var wbBlue: Float = 0.5     // 0 … 1
 }
 
 /// Events emitted by an `NDIReceiver` other than raw video.

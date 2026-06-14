@@ -33,9 +33,18 @@ final class AutoAngleController: ObservableObject {
     /// Whether to also auto-zoom, or only pan/tilt.
     @Published var autoZoom = true
 
+    /// Observable mirror of the tracker's mode so SwiftUI pickers update.
+    @Published var trackingMode: TrackingMode = .face {
+        didSet { tracker.mode = trackingMode }
+    }
+
     /// Latest detections, for UI overlay.
     @Published private(set) var subjects: [TrackedSubject] = []
     @Published private(set) var hasLock = false
+
+    /// Current target box in **top-left** normalised coords (0…1) for the UI
+    /// overlay, or nil when there is no lock.
+    @Published private(set) var targetBoxTopLeft: CGRect?
 
     let tracker = SubjectTracker()
 
@@ -71,7 +80,15 @@ final class AutoAngleController: ObservableObject {
         task = nil
         hasLock = false
         subjects = []
-        ptz.endDrive()        // release the camera
+        targetBoxTopLeft = nil
+        ptz.endDrive()        // smooth eased release of the camera
+    }
+
+    /// Seed manual-region tracking from a top-left normalised rect drawn on the
+    /// preview, and switch the tracker into region mode.
+    func setManualRegion(topLeftRect rect: CGRect) {
+        trackingMode = .manualRegion          // keeps the picker in sync
+        tracker.beginManualRegion(topLeftRect: rect)
     }
 
     private func process(_ pixelBuffer: CVPixelBuffer) async {
@@ -86,14 +103,18 @@ final class AutoAngleController: ObservableObject {
         self.subjects = detected
         guard let target = tracker.target(among: detected) else {
             hasLock = false
-            ptz.send(.panTilt(pan: 0, tilt: 0))   // hold position, no subject
+            targetBoxTopLeft = nil
+            ptz.endDrive()        // no subject → eased stop (no hard halt)
             return
         }
         hasLock = true
+        // Publish the box in top-left coords for the overlay.
+        let b = target.boundingBox
+        targetBoxTopLeft = CGRect(x: b.minX, y: 1.0 - b.maxY, width: b.width, height: b.height)
         applyControl(for: target)
     }
 
-    /// Proportional framing controller → PTZ velocities.
+    /// Proportional framing controller → eased PTZ drive (smooth accel/decel).
     private func applyControl(for target: TrackedSubject) {
         let box = target.boundingBox  // Vision: origin bottom-left
 
@@ -108,15 +129,16 @@ final class AutoAngleController: ObservableObject {
         // Tilt sign: subject above centre (errY < 0) → tilt up (positive).
         let tilt = abs(errY) > deadZone ? Float(-errY) * gain : 0
 
+        // Route through PTZController.drive so the configured easing curve gives
+        // smooth start/stop (spec: 動き出し・停止時は緩和曲線).
+        ptz.drive(pan: clamp(pan), tilt: clamp(tilt))
+
         // Zoom toward the desired fill ratio.
-        var zoom: Float = 0
         if autoZoom {
             let fillError = Float(targetFill - box.height)   // >0 → too small → zoom in
-            if abs(fillError) > 0.05 { zoom = max(-1, min(1, fillError * gain)) }
+            let zoom = abs(fillError) > 0.05 ? clamp(fillError * gain) : 0
+            ptz.send(.zoom(speed: zoom))
         }
-
-        ptz.send(.panTilt(pan: clamp(pan), tilt: clamp(tilt)))
-        if autoZoom { ptz.send(.zoom(speed: clamp(zoom))) }
     }
 
     private func clamp(_ v: Float) -> Float { max(-1, min(1, v)) }

@@ -4,7 +4,15 @@
 //
 //  Deliverable #4 (PTZ). Translates joystick/slider/button intents into
 //  `PTZCommand`s and sends them through the source's receiver over the NDI PTZ
-//  control protocol. Also tracks live PTZ status and named presets.
+//  control protocol. Also tracks last-known PTZ state and named presets.
+//
+//  Pan/tilt uses a configurable easing curve: the *applied* velocity eases
+//  toward the *target* velocity each tick, so the camera accelerates and
+//  decelerates smoothly on stick engage/release (and for auto-tracking).
+//
+//  IMPORTANT: opening a control panel must never move the camera. Nothing in
+//  this controller sends a command on init — commands are only sent in response
+//  to explicit user/auto-tracking actions.
 //
 
 import Combine
@@ -13,31 +21,32 @@ import Foundation
 @MainActor
 final class PTZController: ObservableObject {
 
+    // Last-known state (see NDIPTZStatus note: NDI PTZ is write-only).
     @Published var status = NDIPTZStatus()
     @Published var presets: [PTZPreset]
+
     /// True while a continuous pan/tilt drive is in flight.
     @Published private(set) var isDriving = false
 
-    /// Overall pan/tilt speed multiplier applied to joystick output (0.1…1.0).
-    /// Lower values give finer control; 1.0 is full-speed.
+    /// Overall pan/tilt speed multiplier applied to joystick output (0.05…1.0).
     @Published var panTiltSpeed: Float = 0.5 {
-        didSet {
-            // If a drive is in progress, apply the new multiplier immediately.
-            currentPanTilt = (rawPanTilt.pan * panTiltSpeed, rawPanTilt.tilt * panTiltSpeed)
-        }
+        didSet { target = (rawPanTilt.pan * panTiltSpeed, rawPanTilt.tilt * panTiltSpeed) }
     }
 
-    /// Raw joystick vector before speed scaling (saved so the slider can
-    /// retroactively re-scale while the stick is held).
-    private var rawPanTilt: (pan: Float, tilt: Float) = (0, 0)
+    /// Easing strength for pan/tilt, 0 (instant) … 1 (very smooth / long ramp).
+    /// Configurable from the UI; drives the per-tick smoothing factor.
+    @Published var easing: Float = 0.35
 
     private let receiver: NDIReceiverHandle
     private var statusTask: Task<Void, Never>?
 
-    /// Throttle continuous pan/tilt so we don't flood the camera; NDI cameras
-    /// expect a steady command rate (~20 Hz) while a stick is held.
+    // Pan/tilt drive state. The loop runs on the main actor (Task inherits the
+    // @MainActor context), so these are safe to touch without extra locking.
     private var driveTask: Task<Void, Never>?
-    private var currentPanTilt: (pan: Float, tilt: Float) = (0, 0)
+    private var rawPanTilt: (pan: Float, tilt: Float) = (0, 0)   // before speed scaling
+    private var target: (pan: Float, tilt: Float) = (0, 0)        // after speed scaling
+    private var applied: (pan: Float, tilt: Float) = (0, 0)       // eased, actually sent
+    private var released = true
 
     init(receiver: NDIReceiverHandle, presets: [PTZPreset] = PTZPreset.defaults) {
         self.receiver = receiver
@@ -54,52 +63,66 @@ final class PTZController: ObservableObject {
         }
     }
 
-    deinit { statusTask?.cancel(); driveTask?.cancel() }
+    deinit {
+        statusTask?.cancel()
+        driveTask?.cancel()
+        // Safety: never leave the camera moving when the controller goes away.
+        receiver.send(.panTilt(pan: 0, tilt: 0))
+        receiver.send(.zoom(speed: 0))
+    }
 
-    // MARK: Pan / Tilt (continuous drive from the joystick)
+    // MARK: Pan / Tilt (continuous eased drive)
+
+    /// Per-tick smoothing factor in (0,1]. Lower = smoother/slower approach.
+    private var easeAlpha: Float {
+        // easing 0 → 1.0 (instant), easing 1 → ~0.06 (long, gentle ramp).
+        max(0.06, 1.0 - easing * 0.94)
+    }
 
     /// Called continuously while the joystick is held. `pan`/`tilt` are −1…1.
-    /// A steady ~20 Hz repeater re-sends the latest stick vector so the camera
-    /// keeps moving smoothly without us flooding it on every touch event.
     func drive(pan: Float, tilt: Float) {
+        released = false
         rawPanTilt = (pan, tilt)
-        currentPanTilt = (pan * panTiltSpeed, tilt * panTiltSpeed)
-        // If a live task is already running, just updating currentPanTilt is
-        // enough — the next tick picks it up. Only start a new task when there
-        // is none (or the previous one finished/was cancelled and left a stale
-        // reference, which we detect by trying to cancel + restart).
+        target = (pan * panTiltSpeed, tilt * panTiltSpeed)
+        startLoopIfNeeded()
+    }
+
+    /// Called when the joystick is released — eases the camera to a smooth stop.
+    func endDrive() {
+        released = true
+        rawPanTilt = (0, 0)
+        target = (0, 0)
+        // The loop eases `applied` to ~0, sends a final stop, then exits.
+    }
+
+    private func startLoopIfNeeded() {
         guard driveTask == nil else { return }
         isDriving = true
         driveTask = Task { [weak self] in
             defer {
-                // Always clear the reference when the loop exits so the next
-                // call to drive() can start a fresh task (prevents zombie tasks
-                // from blocking PTZ after source switches).
-                Task { @MainActor [weak self] in
-                    self?.driveTask = nil
-                    self?.isDriving = false
-                }
+                self?.applied = (0, 0)
+                self?.driveTask = nil
+                self?.isDriving = false
             }
             while !Task.isCancelled {
                 guard let self else { return }
-                self.receiver.send(.panTilt(pan: self.currentPanTilt.pan,
-                                            tilt: self.currentPanTilt.tilt))
+                let a = self.easeAlpha
+                self.applied.pan += (self.target.pan - self.applied.pan) * a
+                self.applied.tilt += (self.target.tilt - self.applied.tilt) * a
+                self.receiver.send(.panTilt(pan: self.applied.pan, tilt: self.applied.tilt))
+
+                // Exit once released and we've eased essentially to a stop.
+                if self.released,
+                   abs(self.applied.pan) < 0.01, abs(self.applied.tilt) < 0.01 {
+                    self.receiver.send(.panTilt(pan: 0, tilt: 0))
+                    return
+                }
                 try? await Task.sleep(nanoseconds: 50_000_000) // 20 Hz
             }
         }
     }
 
-    /// Called when the joystick is released — stop the camera.
-    func endDrive() {
-        driveTask?.cancel()
-        driveTask = nil
-        rawPanTilt = (0, 0)
-        currentPanTilt = (0, 0)
-        isDriving = false
-        receiver.send(.panTilt(pan: 0, tilt: 0))
-    }
-
-    // MARK: Zoom / Focus / Iris
+    // MARK: Zoom / Focus
 
     func zoom(speed: Float) { receiver.send(.zoom(speed: speed)) }
     func stopZoom() { receiver.send(.zoom(speed: 0)) }
@@ -107,10 +130,39 @@ final class PTZController: ObservableObject {
 
     func focus(speed: Float) { receiver.send(.focus(speed: speed)) }
     func stopFocus() { receiver.send(.focus(speed: 0)) }
-    func setAutoFocus(_ on: Bool) { receiver.send(.autoFocus(on)) }
+    func setAutoFocus(_ on: Bool) {
+        status.autoFocus = on
+        receiver.send(.autoFocus(on))
+    }
 
-    func iris(speed: Float) { receiver.send(.iris(speed: speed)) }
-    func setAutoIris(_ on: Bool) { receiver.send(.autoIris(on)) }
+    // MARK: Iris / Exposure
+
+    func setIris(_ level: Float) {
+        status.iris = level
+        status.autoIris = false
+        receiver.send(.irisAbsolute(level))
+    }
+    func setAutoIris(_ on: Bool) {
+        status.autoIris = on
+        receiver.send(.autoIris(on))
+    }
+
+    // MARK: White balance
+
+    func setWhiteBalance(_ mode: WhiteBalanceMode) {
+        status.whiteBalance = mode
+        if mode == .manual {
+            receiver.send(.whiteBalanceManual(red: status.wbRed, blue: status.wbBlue))
+        } else {
+            receiver.send(.whiteBalance(mode))
+        }
+    }
+    func setWhiteBalanceManual(red: Float, blue: Float) {
+        status.whiteBalance = .manual
+        status.wbRed = red
+        status.wbBlue = blue
+        receiver.send(.whiteBalanceManual(red: red, blue: blue))
+    }
 
     // MARK: Presets
 

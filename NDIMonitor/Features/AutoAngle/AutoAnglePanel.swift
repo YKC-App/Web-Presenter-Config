@@ -13,7 +13,11 @@ import SwiftUI
 struct AutoAnglePanel: View {
     @StateObject private var ptz: PTZController
     @StateObject private var auto: AutoAngleController
-    @State private var mode: TrackingMode = .face
+
+    /// Region tracking needs a large preview to draw on, so the compact side
+    /// panel only offers the automatic modes; use the full-screen control
+    /// (double-tap a tile) for manual region selection.
+    private let automaticModes = TrackingMode.allCases.filter(\.isAutomatic)
 
     init(receiver: NDIReceiverHandle) {
         let ptz = PTZController(receiver: receiver)
@@ -32,11 +36,10 @@ struct AutoAnglePanel: View {
 
                 statusBadge
 
-                Picker("Tracking", selection: $mode) {
-                    ForEach(TrackingMode.allCases) { Text($0.rawValue).tag($0) }
+                Picker("Tracking", selection: $auto.trackingMode) {
+                    ForEach(automaticModes) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: mode) { new in auto.tracker.mode = new }
 
                 VStack(alignment: .leading) {
                     Text("Sensitivity").font(.subheadline)

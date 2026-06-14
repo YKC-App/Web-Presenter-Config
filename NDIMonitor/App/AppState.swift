@@ -24,6 +24,10 @@ final class AppState: ObservableObject {
     /// The source currently selected for control (PTZ/KVM/auto-angle panels).
     @Published var selectedSourceID: NDISource.ID?
 
+    /// When set, the full-screen PTZ control surface is presented for this
+    /// source (opened by double-tapping a tile).
+    @Published var fullScreenSourceID: NDISource.ID?
+
     init() {
         let service = AppState.makeService()
         self.service = service

@@ -102,7 +102,15 @@ private final class MockReceiver: NDIReceiverHandle {
         case .focus(let s): ptz.focus = max(0, min(1, ptz.focus + s * 0.05))
         case .focusAbsolute(let f): ptz.focus = f
         case .autoFocus(let on): ptz.autoFocus = on
-        default: break
+        case .iris(let s): ptz.iris = max(0, min(1, ptz.iris + s * 0.05)); ptz.autoIris = false
+        case .irisAbsolute(let v): ptz.iris = v; ptz.autoIris = false
+        case .autoIris(let on): ptz.autoIris = on
+        case .whiteBalance(let mode):
+            ptz.whiteBalance = mode
+        case .whiteBalanceManual(let r, let b):
+            ptz.whiteBalance = .manual; ptz.wbRed = r; ptz.wbBlue = b
+        case .recallPreset, .storePreset:
+            break
         }
         hub.publish(.ptzStatus(ptz))
     }

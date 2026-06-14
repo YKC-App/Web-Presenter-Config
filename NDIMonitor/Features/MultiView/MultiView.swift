@@ -33,6 +33,9 @@ struct MultiView: View {
                     ForEach(tiles) { tile in
                         MultiViewTile(tile: tile)
                             .frame(width: cellWidth, height: cellHeight)
+                            // Double-tap opens the full-screen PTZ control (the
+                            // grid preview is small); single tap just selects.
+                            .onTapGesture(count: 2) { appState.fullScreenSourceID = tile.id }
                             .onTapGesture { appState.selectedSourceID = tile.id }
                     }
                 }

@@ -37,6 +37,22 @@ struct RootView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .task { appState.start() }
+        .fullScreenCover(isPresented: fullScreenBinding) {
+            if let id = appState.fullScreenSourceID,
+               let source = ndiManager.source(for: id),
+               let receiver = ndiManager.receiver(for: id) {
+                PTZFullScreenView(source: source, receiver: receiver) {
+                    appState.fullScreenSourceID = nil
+                }
+            }
+        }
+    }
+
+    private var fullScreenBinding: Binding<Bool> {
+        Binding(
+            get: { appState.fullScreenSourceID != nil },
+            set: { if !$0 { appState.fullScreenSourceID = nil } }
+        )
     }
 
     @ToolbarContentBuilder

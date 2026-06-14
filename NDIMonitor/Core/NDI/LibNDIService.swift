@@ -186,8 +186,22 @@ private final class LibNDIReceiver: NDIReceiverHandle {
             // absolute exposure level: centre (0) = 0.5, in = 1.0, out = 0.0.
             let level = max(0.0, min(1.0, (s + 1.0) / 2.0))
             NDIlib_recv_ptz_exposure_manual(recv, level)
+        case .irisAbsolute(let level):
+            NDIlib_recv_ptz_exposure_manual(recv, max(0.0, min(1.0, level)))
         case .autoIris(let on):
             if on { NDIlib_recv_ptz_exposure_auto(recv) }
+        case .whiteBalance(let mode):
+            switch mode {
+            case .auto:    NDIlib_recv_ptz_white_balance_auto(recv)
+            case .indoor:  NDIlib_recv_ptz_white_balance_indoor(recv)
+            case .outdoor: NDIlib_recv_ptz_white_balance_outdoor(recv)
+            case .oneshot: NDIlib_recv_ptz_white_balance_oneshot(recv)
+            case .manual:  break // applied via .whiteBalanceManual
+            }
+        case .whiteBalanceManual(let red, let blue):
+            NDIlib_recv_ptz_white_balance_manual(recv,
+                                                 max(0.0, min(1.0, red)),
+                                                 max(0.0, min(1.0, blue)))
         case .recallPreset(let index, let speed):
             NDIlib_recv_ptz_recall_preset(recv, Int32(index), speed)
         case .storePreset(let index):

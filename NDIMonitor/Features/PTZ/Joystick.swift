@@ -13,10 +13,11 @@ struct Joystick: View {
     /// Continuous vector callback while held: x = pan (−1…1), y = tilt (−1…1).
     var onChange: (_ pan: Float, _ tilt: Float) -> Void
     var onEnd: () -> Void
+    /// Overall diameter of the joystick. Larger = easier touch control.
+    var size: CGFloat = 220
 
     @State private var knob: CGSize = .zero
-    private let size: CGFloat = 220
-    private let knobSize: CGFloat = 72
+    private var knobSize: CGFloat { size * 0.33 }
 
     var body: some View {
         ZStack {
