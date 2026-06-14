@@ -33,6 +33,19 @@ targets:
       - path: NDIMonitor
     info:
       path: NDIMonitor/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: NDI Monitor
+        UILaunchScreen: {}
+        UIRequiresFullScreen: false
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+        # Required for NDI's mDNS/Bonjour discovery on iOS 14+.
+        NSLocalNetworkUsageDescription: Used to discover NDI video sources on your local network.
+        NSBonjourServices:
+          - _ndi._tcp
     dependencies:
       # Static NDI library (Vendor/NDI/libndi_ios.a). Not embedded (static).
       - framework: Vendor/NDI/libndi_ios.a
@@ -43,8 +56,6 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.webpresenter.ndimonitor
-        INFOPLIST_FILE: NDIMonitor/Resources/Info.plist
-        GENERATE_INFOPLIST_FILE: NO
         # --- NDI SDK wiring ---
         SWIFT_INCLUDE_PATHS: "$(SRCROOT)/Vendor/NDI"          # finds module.modulemap
         HEADER_SEARCH_PATHS: "$(SRCROOT)/Vendor/NDI/include"  # NDI headers
