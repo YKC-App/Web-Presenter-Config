@@ -125,8 +125,10 @@ final class AutoAngleController: ObservableObject {
 
         let gain = Float(0.5 + Double(sensitivity) * 1.5)   // 0.5…2.0
 
-        let pan = abs(errX) > deadZone ? Float(errX) * gain : 0
-        // Tilt sign: subject above centre (errY < 0) → tilt up (positive).
+        // Pan sign matches the joystick convention (negative pan = camera right).
+        // Subject right of centre (errX > 0) → pan the camera right to recentre.
+        let pan = abs(errX) > deadZone ? Float(-errX) * gain : 0
+        // Tilt: subject above centre (errY < 0) → tilt up (positive) to recentre.
         let tilt = abs(errY) > deadZone ? Float(-errY) * gain : 0
 
         // Route through PTZController.drive so the configured easing curve gives
