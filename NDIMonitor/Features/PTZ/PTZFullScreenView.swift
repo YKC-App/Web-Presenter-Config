@@ -176,24 +176,26 @@ struct PTZFullScreenView: View {
             HStack {
                 Text("Iris / Exposure").font(.subheadline.bold())
                 Spacer()
-                Toggle("Auto", isOn: Binding(
+                Text("Auto").font(.caption2).foregroundStyle(.secondary)
+                Toggle("", isOn: Binding(
                     get: { ptz.status.autoIris },
                     set: { ptz.setAutoIris($0) }))
                     .labelsHidden()
-                Text("Auto").font(.caption2).foregroundStyle(.secondary)
             }
+            // Always usable; adjusting switches the camera to manual exposure.
             HStack(spacing: 8) {
                 StepButton(symbol: "minus") {
                     ptz.setIris(max(0, ptz.status.iris - 0.05))
                 }
                 Slider(value: Binding(get: { ptz.status.iris },
                                       set: { ptz.setIris($0) }), in: 0...1)
-                    .disabled(ptz.status.autoIris)
                 StepButton(symbol: "plus") {
                     ptz.setIris(min(1, ptz.status.iris + 0.05))
                 }
+                Text(String(format: "%.0f", ptz.status.iris * 100))
+                    .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                    .frame(width: 26)
             }
-            .opacity(ptz.status.autoIris ? 0.4 : 1)
         }
     }
 
@@ -220,29 +222,31 @@ struct PTZFullScreenView: View {
                 }
             }
             if ptz.status.whiteBalance == .manual {
-                manualWBSliders
+                manualWBSteppers
             }
         }
     }
 
-    private var manualWBSliders: some View {
-        VStack(spacing: 4) {
-            wbSlider(label: "R", color: .red, value: ptz.status.wbRed) { r in
+    private var manualWBSteppers: some View {
+        VStack(spacing: 6) {
+            wbStepper(label: "R", color: .red, value: ptz.status.wbRed) { r in
                 ptz.setWhiteBalanceManual(red: r, blue: ptz.status.wbBlue)
             }
-            wbSlider(label: "B", color: .blue, value: ptz.status.wbBlue) { b in
+            wbStepper(label: "B", color: .blue, value: ptz.status.wbBlue) { b in
                 ptz.setWhiteBalanceManual(red: ptz.status.wbRed, blue: b)
             }
         }
     }
 
-    private func wbSlider(label: String, color: Color, value: Float,
-                          onChange: @escaping (Float) -> Void) -> some View {
-        HStack(spacing: 8) {
-            Text(label).font(.caption.bold()).foregroundStyle(color).frame(width: 14)
-            Slider(value: Binding(get: { value }, set: { onChange($0) }), in: 0...1)
-            Text(String(format: "%.0f", value * 100)).font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary).frame(width: 26)
+    private func wbStepper(label: String, color: Color, value: Float,
+                           onChange: @escaping (Float) -> Void) -> some View {
+        HStack(spacing: 10) {
+            Text(label).font(.subheadline.bold()).foregroundStyle(color).frame(width: 16)
+            StepButton(symbol: "minus") { onChange(max(0, value - 0.05)) }
+            Text(String(format: "%.0f", value * 100))
+                .font(.subheadline.monospacedDigit())
+                .frame(maxWidth: .infinity)
+            StepButton(symbol: "plus") { onChange(min(1, value + 0.05)) }
         }
     }
 

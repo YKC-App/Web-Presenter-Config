@@ -58,6 +58,11 @@ final class AutoAngleController: ObservableObject {
     private var lastAnalysis = Date.distantPast
     private let minInterval: TimeInterval = 1.0 / 10.0  // ~10 Hz analysis
 
+    /// When tracking, re-assert auto-focus on this cadence so the camera keeps
+    /// focus locked on the moving subject.
+    private var lastAFAssert = Date.distantPast
+    private let afAssertInterval: TimeInterval = 3.0
+
     init(receiver: NDIReceiverHandle, ptz: PTZController) {
         self.receiver = receiver
         self.ptz = ptz
@@ -66,9 +71,14 @@ final class AutoAngleController: ObservableObject {
     deinit { task?.cancel() }
 
     private func start() {
+        // Force auto-focus on while tracking (spec: 追尾中は強制的にAF).
+        ptz.setAutoFocus(true)
+        lastAFAssert = Date()
         task = Task { [weak self] in
             guard let self else { return }
             for await event in receiver.events {
+                if Task.isCancelled { break }
+                if !self.isEnabled { break }
                 guard case .video(let frame) = event else { continue }
                 await self.process(frame.pixelBuffer)
             }
@@ -81,7 +91,8 @@ final class AutoAngleController: ObservableObject {
         hasLock = false
         subjects = []
         targetBoxTopLeft = nil
-        ptz.endDrive()        // smooth eased release of the camera
+        ptz.endDrive()        // smooth eased release of pan/tilt
+        ptz.stopZoom()        // halt any in-progress auto-zoom
     }
 
     /// Seed manual-region tracking from a top-left normalised rect drawn on the
@@ -92,19 +103,36 @@ final class AutoAngleController: ObservableObject {
     }
 
     private func process(_ pixelBuffer: CVPixelBuffer) async {
+        guard isEnabled else { return }
         guard Date().timeIntervalSince(lastAnalysis) >= minInterval else { return }
         lastAnalysis = Date()
+
+        // Re-assert auto-focus periodically so it stays on through zoom/pan.
+        if Date().timeIntervalSince(lastAFAssert) >= afAssertInterval {
+            ptz.setAutoFocus(true)
+            lastAFAssert = Date()
+        }
 
         // Run Vision off the main actor.
         let detected = await Task.detached(priority: .userInitiated) { [tracker] in
             tracker.detect(in: pixelBuffer)
         }.value
 
+        // Tracking may have been switched off while Vision was running — if so,
+        // release the camera and do NOT issue any further drive (this is what
+        // makes turning Auto Tracking off actually return control to manual).
+        guard isEnabled else {
+            ptz.endDrive()
+            ptz.stopZoom()
+            return
+        }
+
         self.subjects = detected
         guard let target = tracker.target(among: detected) else {
             hasLock = false
             targetBoxTopLeft = nil
             ptz.endDrive()        // no subject → eased stop (no hard halt)
+            ptz.stopZoom()
             return
         }
         hasLock = true
