@@ -1,4 +1,4 @@
-# XcodeGen spec for the NDI Monitor iPad app.
+# XcodeGen spec for the NDI Monitor iPad / Mac Catalyst app.
 #
 # Generate the Xcode project with:
 #     brew install xcodegen   # once
@@ -6,6 +6,14 @@
 #     open NDIMonitor.xcodeproj
 #
 # The project file itself is git-ignored so it can be regenerated cleanly.
+#
+# --- Platform matrix ---
+#   iOS (iPad)       libndi_ios.a   TARGETED_DEVICE_FAMILY = 2
+#   macOS (Catalyst) libndi_ios.a   SUPPORTS_MACCATALYST = YES
+#     The NDI SDK for Apple ships a fat library that covers iOS arm64 AND
+#     the macOS arm64/x86_64 slices used by Mac Catalyst. If your SDK copy
+#     only has an iOS slice, replace Vendor/NDI/libndi_ios.a with the
+#     "NDI SDK for Apple" universal build from ndi.video/download-ndi-sdk.
 
 name: NDIMonitor
 
@@ -18,11 +26,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.9"
-    TARGETED_DEVICE_FAMILY: "2"   # iPad
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
-    # Build against the real NDI SDK (static libndi_ios.a). The NDISDK module is
-    # wired up below; see docs/NDI_SDK_INTEGRATION.md.
     SWIFT_ACTIVE_COMPILATION_CONDITIONS: USE_REAL_NDI
 
 targets:
@@ -42,25 +47,38 @@ targets:
           - UIInterfaceOrientationLandscapeRight
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
-        # Required for NDI's mDNS/Bonjour discovery on iOS 14+.
         NSLocalNetworkUsageDescription: Used to discover NDI video sources on your local network.
         NSBonjourServices:
           - _ndi._tcp
+    entitlements:
+      path: NDIMonitor/Resources/NDIMonitor.entitlements
+      properties:
+        # Required for Mac Catalyst: allow outbound network connections.
+        com.apple.security.network.client: true
     dependencies:
-      # Static NDI library (Vendor/NDI/libndi_ios.a). Not embedded (static).
       - framework: Vendor/NDI/libndi_ios.a
         embed: false
-      # System frameworks the NDI SDK depends on.
       - sdk: VideoToolbox.framework
       - sdk: Accelerate.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.webpresenter.ndimonitor
-        # --- NDI SDK wiring ---
-        SWIFT_INCLUDE_PATHS: "$(SRCROOT)/Vendor/NDI"          # finds module.modulemap
-        HEADER_SEARCH_PATHS: "$(SRCROOT)/Vendor/NDI/include"  # NDI headers
-        LIBRARY_SEARCH_PATHS: "$(SRCROOT)/Vendor/NDI"         # libndi_ios.a location
-        OTHER_LDFLAGS: "-lc++"                                # NDI is C++ underneath
+        # iPad only on iOS; Mac Catalyst builds for all Macs.
+        TARGETED_DEVICE_FAMILY: "2"
+        # ---- Mac Catalyst ----
+        SUPPORTS_MACCATALYST: YES
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: YES
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        # ---- NDI SDK wiring ----
+        SWIFT_INCLUDE_PATHS: "$(SRCROOT)/Vendor/NDI"
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/Vendor/NDI/include"
+        LIBRARY_SEARCH_PATHS: "$(SRCROOT)/Vendor/NDI"
+        OTHER_LDFLAGS: "-lc++"
+        # ---- Assets ----
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      configs:
+        Release:
+          VALIDATE_PRODUCT: YES
 
   NDIMonitorTests:
     type: bundle.unit-test

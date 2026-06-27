@@ -1,0 +1,81 @@
+appId: com.webpresenter.ndimonitor
+productName: NDI Monitor
+copyright: "Copyright © 2025 Web Presenter"
+buildVersion: "1.0.0"
+
+directories:
+  buildResources: assets
+  output: release
+
+files:
+  - dist/**/*
+  - native/build/**/*.node
+  - "!**/*.map"
+  - "!**/node_modules/**"
+
+extraResources:
+  - from: assets/icon.ico
+    to: icon.ico
+  # NDI runtime DLL — copy from NDI SDK after running scripts/setup.bat
+  - from: native/libs/Processing.NDI.Lib.x64.dll
+    to: Processing.NDI.Lib.x64.dll
+    filter:
+      - "*.dll"
+
+# ───── Windows NSIS installer ─────
+win:
+  icon: assets/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: "NDIMonitor-Setup-${version}.exe"
+  signingHashAlgorithms:
+    - sha256
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  installerHeaderIcon: assets/icon.ico
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: NDI Monitor
+  displayLanguageSelector: false
+  license: installer/license.txt
+  installerLanguages:
+    - en_US
+    - ja_JP
+  include: installer/nsis-custom.nsh
+
+# ───── macOS (for Electron Mac builds) ─────
+mac:
+  icon: assets/icon.icns
+  category: public.app-category.video
+  target:
+    - target: dmg
+      arch:
+        - universal
+  hardenedRuntime: true
+  entitlements: ../NDIMonitor/Resources/NDIMonitor.entitlements
+  entitlementsInherit: ../NDIMonitor/Resources/NDIMonitor.entitlements
+  extendInfo:
+    NSLocalNetworkUsageDescription: Used to discover NDI video sources on your local network.
+
+dmg:
+  title: "NDI Monitor ${version}"
+  icon: assets/icon.icns
+  iconSize: 128
+  window:
+    width: 660
+    height: 400
+  contents:
+    - x: 180
+      y: 170
+      type: file
+    - x: 480
+      y: 170
+      type: link
+      path: /Applications

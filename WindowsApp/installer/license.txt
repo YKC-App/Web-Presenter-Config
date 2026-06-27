@@ -1,0 +1,9 @@
+NDI Monitor
+Copyright (c) 2025 Web Presenter. All rights reserved.
+
+This software uses the NDI(R) SDK.
+NDI is a registered trademark of Vizrt Group.
+The NDI SDK is subject to the NDI SDK License Agreement available at:
+https://ndi.video/legal/sdk-license-agreement/
+
+By installing this software, you agree to the terms of the above licenses.
